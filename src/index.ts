@@ -1,8 +1,8 @@
-// src/index.ts
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth.routes.js';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -17,6 +17,13 @@ async function main() {
     // Add middleware to parse JSON request bodies
     app.use(express.json());
     app.use(cookieParser());
+
+    const corsOptions = {
+      origin: 'http://localhost:3001',
+      credentials: true,
+    };
+
+    app.use(cors(corsOptions));
 
     // Mount the authentication routes under the /api/auth prefix
     app.use('/api/auth',authRoutes);

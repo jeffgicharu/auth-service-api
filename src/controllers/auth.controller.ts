@@ -5,14 +5,18 @@ import { PrismaClient } from "@prisma/client";
 import { signAccessToken, verifyToken } from "../utils/jwt.utils.js";
 import { DecodedJwtPayload } from "../types/jwt.types.js";
 import argon2 from 'argon2';
+import logger from '../lib/logger.js';
 
 export async function registerHandler(req: Request, res: Response): Promise<void> {
+    const handlerName = 'registerHandler';
     try {
         // Validate request body
         const validatedData = RegisterSchema.parse(req.body);
 
         // Call the service
         const user = await registerUser(validatedData);
+
+        logger.info(`User registered successfully: ${user.email}`);
 
         // Send success response
         res.status(201).json({
@@ -28,12 +32,16 @@ export async function registerHandler(req: Request, res: Response): Promise<void
             res.status(409).json({ message: error.message });
             return;
         }
-        console.error(error);
+        logger.error(`Error in ${handlerName}`, {
+            error: (error as Error).message,
+            stack: (error as Error).stack,
+        });
         res.status(500).json({ message: 'Internal Server Error' });
     }
 }
 
 export async function loginHandler(req: Request, res: Response): Promise<void> {
+    const handlerName = 'loginHandler';
     try {
         const validatedData = LoginSchema.parse(req.body);
         const { accessToken, refreshToken } = await loginUser(validatedData);
@@ -45,6 +53,8 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
             path: '/', // Make the cookie available on all pages
             maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
         });
+
+        logger.info("Login successful");
 
         // Send the access token in the response body
         res.status(200).json({
@@ -61,7 +71,10 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
             res.status(400).json({ message: "Invalid input", errors: error.errors });
             return;
         }
-        console.error(error);
+        logger.error(`Error in ${handlerName}`, {
+            error: (error as Error).message,
+            stack: (error as Error).stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
         return;
     }
@@ -88,38 +101,38 @@ export async function refreshHandler(req: Request, res: Response): Promise<void>
     const { decoded } = verifyToken(refreshToken, process.env.REFRESH_TOKEN_SECRET!);
 
     if (!decoded || !(decoded as DecodedJwtPayload).userId) {
-        res.status(403.).json({message:'Inavlid refresh token'});
+        res.status(403.).json({ message: 'Inavlid refresh token' });
         return;
     }
 
     // Find all active sessions for the user
     const userSessions = await prisma.session.findMany({
-        where: {userId:(decoded as DecodedJwtPayload).userId},
+        where: { userId: (decoded as DecodedJwtPayload).userId },
     });
 
-    if(!userSessions.length){
-        res.status(403).json({message:'Session not found. Please log in again'});
+    if (!userSessions.length) {
+        res.status(403).json({ message: 'Session not found. Please log in again' });
         return;
     }
 
     // Loop through the sessions and find the one that matches the token
-    let validSession:{id:string,tokenHash:string} | null = null;
-    for(const session of userSessions){
-        const isTokenValid = await argon2.verify(session.tokenHash,refreshToken);
-        if(isTokenValid){
+    let validSession: { id: string, tokenHash: string } | null = null;
+    for (const session of userSessions) {
+        const isTokenValid = await argon2.verify(session.tokenHash, refreshToken);
+        if (isTokenValid) {
             validSession = session;
             break;
         }
     }
 
-    if(!validSession){
-        res.status(403).json({message: 'Invalid session. Please log in again'});
+    if (!validSession) {
+        res.status(403).json({ message: 'Invalid session. Please log in again' });
         return;
     }
 
     // Issue a new access token
-    const newAccessToken = signAccessToken({userId:(decoded as DecodedJwtPayload).userId});
+    const newAccessToken = signAccessToken({ userId: (decoded as DecodedJwtPayload).userId });
 
-    res.status(200).json({accessToken:newAccessToken});
+    res.status(200).json({ accessToken: newAccessToken });
     return;
 }
