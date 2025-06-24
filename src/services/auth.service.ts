@@ -9,8 +9,14 @@ const prisma = new PrismaClient();
 export const RegisterSchema=z.object({
     email: z.string().email(),
     password: z.string().min(8),
-    firstName: z.string().min(2).optional(),
-    lastName: z.string().min(2).optional(),
+    firstName: z.preprocess(
+        (val) => (val===""? undefined: val),
+        z.string().min(2,{message: "First name must be at least 2 characters"}).optional()
+    ),
+    lastName: z.preprocess(
+        (val)=>(val===""?undefined:val),
+        z.string().min(2,{message: "Last name must be at least 2 characters"}).optional()
+    ),
 });
 
 
